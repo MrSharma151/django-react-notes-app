@@ -1,0 +1,109 @@
+version: "3.8"
+
+services:
+
+    # ----------------------------------------------------
+  # NGINX REVERSE PROXY + FRONTEND SERVER
+  # ----------------------------------------------------
+  nginx:
+    build:
+      context: .                      # Build from project root (IMPORTANT)
+      dockerfile: nginx/Dockerfile    # Use Dockerfile inside nginx folder
+
+    image: nginx_custom               # Custom image name
+    container_name: nginx_cont        # Container name
+
+    ports:
+      - "80:80"                       # Expose port 80 to host machine
+
+    restart: always                   # Restart if container crashes
+
+    depends_on:
+      - django_app                    # Start only after Django is ready
+
+    networks:
+      - notes-app-nw                  # Allow nginx to talk to Django
+
+
+
+  # ----------------------------------------------------
+  # DJANGO APPLICATION
+  # ----------------------------------------------------
+  django_app:
+    build:
+      context: .                    # Build Django image from project root directory
+
+    image: django_app
+    container_name: "django_cont"
+
+    ports:
+      - "8000:8000"                 # Exposed for debugging; nginx doesn't need this
+
+    # Run migrations first, then start Gunicorn server
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             gunicorn notesapp.wsgi --bind 0.0.0.0:8000"
+
+    env_file:
+      - ".env"                      # Load Django environment vars from file
+
+    depends_on:
+      - db                          # DB must start before Django
+
+    restart: always
+
+    # Health check for Django container
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000 || exit 1"]
+      interval: 10s                 # Check every 10 seconds
+      timeout: 5s                   # Timeout after 5 seconds
+      retries: 5                    # Retry 5 times before marking unhealthy
+      start_period: 30s             # Give Django some initial startup time
+
+    networks:
+      - notes-app-nw                # Same network for communication with nginx & db
+
+
+  # ----------------------------------------------------
+  # MYSQL DATABASE (using Docker Named Volume)
+  # ----------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: "db_cont"
+
+    # Default MySQL credentials & DB name
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=test_db
+
+    # NOTE:
+    # This uses a DOCKER-MANAGED VOLUME (mysql_data)
+    # → MUCH safer, faster, and stable in WSL than bind-mounts.
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+    # MySQL health check
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s             # MySQL takes longer to initialize
+
+    networks:
+      - notes-app-nw                # Shared network
+
+
+# ----------------------------------------------------
+# DOCKER NETWORK
+# ----------------------------------------------------
+networks:
+  notes-app-nw:                     # Simple bridge network for all containers
+
+
+# ----------------------------------------------------
+# DOCKER NAMED VOLUMES (WSL SAFE)
+# ----------------------------------------------------
+volumes:
+  mysql_data:                        # Stores persistent MySQL data safely
+
