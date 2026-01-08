@@ -1,29 +1,79 @@
-@Library('Shared')_
-pipeline{
-    agent { label 'dev-server'}
-    
-    stages{
-        stage("Code clone"){
-            steps{
-                sh "whoami"
-            clone("https://github.com/LondheShubham153/django-notes-app.git","main")
+pipeline {
+    agent any
+
+    environment {
+        DOCKERHUB_USERNAME = "mrsharma151"
+        IMAGE_NAME = "django-react-notes-app"
+        IMAGE_TAG = "latest"
+        DOCKER_IMAGE = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+    }
+
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                echo "Cloning GitHub repository"
+                checkout scm
             }
         }
-        stage("Code Build"){
-            steps{
-            dockerbuild("notes-app","latest")
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                  docker build -t $DOCKER_IMAGE .
+                '''
             }
         }
-        stage("Push to DockerHub"){
-            steps{
-                dockerpush("dockerHubCreds","notes-app","latest")
+
+        stage('Docker Hub Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    '''
+                }
             }
         }
-        stage("Deploy"){
-            steps{
-                deploy()
+
+        stage('Push Image to Docker Hub') {
+            steps {
+                sh '''
+                  docker push $DOCKER_IMAGE
+                '''
             }
         }
-        
+
+        stage('Deploy using Docker Compose') {
+            steps {
+                sh '''
+                  docker-compose down
+                  docker-compose pull
+                  docker-compose up -d
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Cleaning up unused Docker images"
+            sh 'docker image prune -f'
+        }
+        success {
+            echo "CI/CD Pipeline executed successfully 🚀"
+        }
+        failure {
+            echo "CI/CD Pipeline failed ❌"
+        }
     }
 }
