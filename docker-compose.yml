@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
 
-    # ----------------------------------------------------
+  # ----------------------------------------------------
   # NGINX REVERSE PROXY + FRONTEND SERVER
   # ----------------------------------------------------
   nginx:
@@ -30,10 +30,8 @@ services:
   # DJANGO APPLICATION
   # ----------------------------------------------------
   django_app:
-    build:
-      context: .                    # Build Django image from project root directory
 
-    image: django_app
+    image: mrsharma151/django-react-notes-app:latest   # Pre-built Django app image
     container_name: "django_cont"
 
     ports:
