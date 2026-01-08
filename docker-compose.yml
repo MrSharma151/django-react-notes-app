@@ -10,7 +10,7 @@ services:
       context: .                      # Build from project root (IMPORTANT)
       dockerfile: nginx/Dockerfile    # Use Dockerfile inside nginx folder
 
-    image: nginx_custom               # Custom image name
+    # image: nginx_custom               # Custom image name
     container_name: nginx_cont        # Container name
 
     ports:
